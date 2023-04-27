@@ -59,7 +59,7 @@ func main() {
 	port := os.Getenv("PORT")
 
 	if port == "" {
-		port = "8080"
+		port = "8000"
 	}
 
 	http.HandleFunc("/sendAll", func(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +87,9 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 
 	})
+
+	fmt.Println(os.Getenv("FIREBASE_AUTH_KEY"))
+	fmt.Printf("Running in %s...\n", port)
 
 	log.Fatal(
 		http.ListenAndServe(fmt.Sprintf(":%s", port), nil),
