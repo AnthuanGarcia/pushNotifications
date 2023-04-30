@@ -24,19 +24,25 @@ type Ambient struct {
 }
 
 const DBFile = "./tokens.db"
-const Table = `CREATE TABLE IF NOT EXISTS Tokens(token VARCHAR(64) NOT NULL,time DATETIME NOT NULL);`
+const Table = `CREATE TABLE IF NOT EXISTS Tokens(token VARCHAR(256) NOT NULL,time DATETIME NOT NULL);`
+
+var app *firebase.App
 
 func sendPushNotification(deviceTokens []string, data Ambient) (err error) {
 
-	authKey := []byte(os.Getenv("FIREBASE_AUTH_KEY"))
-
-	opts := []option.ClientOption{option.WithCredentialsJSON(authKey)}
+	credentials := os.Getenv("FILENAME_CREDENTIALS")
+	opts := []option.ClientOption{option.WithCredentialsFile(credentials)}
 
 	ctx := context.Background()
-	app, err := firebase.NewApp(ctx, nil, opts...)
 
-	if err != nil {
-		return
+	if app == nil {
+
+		app, err = firebase.NewApp(ctx, nil, opts...)
+
+		if err != nil {
+			return
+		}
+
 	}
 
 	fcmClient, err := app.Messaging(ctx)
@@ -45,9 +51,28 @@ func sendPushNotification(deviceTokens []string, data Ambient) (err error) {
 		return
 	}
 
+	title := "Alerta de Ambiente"
+	body := fmt.Sprintf(
+		"Temperatura: %f°C<br>Humedad: %f%%<br>Indice de Calor: %f°C",
+		data.Temperature,
+		data.Humidity,
+		data.HeatIndex,
+	)
+
+	if data.Movement > 0 {
+
+		title = "¡Alguien ha entrado al site!"
+		body = "Se han detectado lecturas de movimiento."
+
+	}
+
 	_, err = fcmClient.SendMulticast(ctx, &messaging.MulticastMessage{
-		Notification: &messaging.Notification{
-			Title: "Hola", Body: "Prueba",
+		/*Notification: &messaging.Notification{
+			Title: title, Body: body,
+		},*/
+		Data: map[string]string{
+			"Title": title,
+			"Body":  body,
 		},
 		Tokens: deviceTokens,
 	})
