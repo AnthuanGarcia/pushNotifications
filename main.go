@@ -28,7 +28,7 @@ const Table = `CREATE TABLE IF NOT EXISTS Tokens(token VARCHAR(256) NOT NULL,tim
 
 var app *firebase.App
 
-func sendPushNotification(deviceTokens []string, data Ambient) (err error) {
+func sendPushNotification(deviceTokens []string, ambient Ambient) (err error) {
 
 	credentials := os.Getenv("FILENAME_CREDENTIALS")
 	opts := []option.ClientOption{option.WithCredentialsFile(credentials)}
@@ -51,18 +51,23 @@ func sendPushNotification(deviceTokens []string, data Ambient) (err error) {
 		return
 	}
 
-	title := "Alerta de Ambiente"
-	body := fmt.Sprintf(
-		"Temperatura: %f°C<br>Humedad: %f%%<br>Indice de Calor: %f°C",
-		data.Temperature,
-		data.Humidity,
-		data.HeatIndex,
+	data := make(map[string]string)
+
+	data["Title"] = "Alerta de Ambiente"
+	data["Body"] = fmt.Sprintf(
+		"Temperatura: %.2f°C<br>Humedad: %.0f%%<br>Indice de Calor: %.2f°C",
+		ambient.Temperature,
+		ambient.Humidity,
+		ambient.HeatIndex,
 	)
+	data["Temp"] = ""
 
-	if data.Movement > 0 {
+	if ambient.Movement > 0 {
 
-		title = "¡Alguien ha entrado al site!"
-		body = "Se han detectado lecturas de movimiento."
+		data["Title"] = "¡Alguien ha entrado al site!"
+		data["Body"] = "Se han detectado lecturas de movimiento."
+		data["Move"] = ""
+		delete(data, "Temp")
 
 	}
 
@@ -70,10 +75,7 @@ func sendPushNotification(deviceTokens []string, data Ambient) (err error) {
 		/*Notification: &messaging.Notification{
 			Title: title, Body: body,
 		},*/
-		Data: map[string]string{
-			"Title": title,
-			"Body":  body,
-		},
+		Data:   data,
 		Tokens: deviceTokens,
 	})
 
@@ -189,8 +191,6 @@ func registerToken(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	w.WriteHeader(http.StatusOK)
 
 }
 
