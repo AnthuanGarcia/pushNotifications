@@ -75,8 +75,9 @@ func sendPushNotification(deviceTokens []string, ambient Ambient) (err error) {
 		/*Notification: &messaging.Notification{
 			Title: title, Body: body,
 		},*/
-		Data:   data,
-		Tokens: deviceTokens,
+		Data:    data,
+		Tokens:  deviceTokens,
+		Android: &messaging.AndroidConfig{Priority: "high"},
 	})
 
 	if err != nil {
