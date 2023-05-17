@@ -2,17 +2,15 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/messaging"
-	_ "github.com/mattn/go-sqlite3"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
@@ -23,12 +21,9 @@ type Ambient struct {
 	Movement    int     `json:"move"`
 }
 
-const DBFile = "./tokens.db"
-const Table = `CREATE TABLE IF NOT EXISTS Tokens(token VARCHAR(256) NOT NULL,time DATETIME NOT NULL);`
-
 var app *firebase.App
 
-func sendPushNotification(deviceTokens []string, ambient Ambient) (err error) {
+func sendPushNotification(ambient Ambient) (err error) {
 
 	credentials := os.Getenv("FILENAME_CREDENTIALS")
 	opts := []option.ClientOption{option.WithCredentialsFile(credentials)}
@@ -46,6 +41,12 @@ func sendPushNotification(deviceTokens []string, ambient Ambient) (err error) {
 	}
 
 	fcmClient, err := app.Messaging(ctx)
+
+	if err != nil {
+		return
+	}
+
+	dbClient, err := app.Firestore(ctx)
 
 	if err != nil {
 		return
@@ -71,10 +72,26 @@ func sendPushNotification(deviceTokens []string, ambient Ambient) (err error) {
 
 	}
 
+	deviceTokens := []string{}
+	tokens := dbClient.Collection("tokens").Documents(ctx)
+
+	for {
+
+		token, err := tokens.Next()
+
+		if err == iterator.Done {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		deviceTokens = append(deviceTokens, token.Data()["token"].(string))
+
+	}
+
 	_, err = fcmClient.SendMulticast(ctx, &messaging.MulticastMessage{
-		/*Notification: &messaging.Notification{
-			Title: title, Body: body,
-		},*/
 		Data:    data,
 		Tokens:  deviceTokens,
 		Android: &messaging.AndroidConfig{Priority: "high"},
@@ -107,90 +124,12 @@ func sendAll(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	db, err := sql.Open("sqlite3", DBFile)
-
-	if err != nil {
-		log.Println("Error:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	rows, err := db.Query("SELECT token FROM Tokens;")
-
-	if err != nil {
-		log.Println("Error:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	defer rows.Close()
-
-	deviceTokens := []string{}
-
-	for rows.Next() {
-
-		token := ""
-		err = rows.Scan(&token)
-
-		if err != nil {
-			log.Println("Error:", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		deviceTokens = append(deviceTokens, token)
-
-	}
-
-	if err := sendPushNotification(deviceTokens, *ambient); err != nil {
+	if err := sendPushNotification(*ambient); err != nil {
 
 		log.Println("Error:", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 
-	}
-
-}
-
-func registerToken(w http.ResponseWriter, r *http.Request) {
-
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Invalid Method"))
-		return
-	}
-
-	token := r.URL.Query().Get("token")
-
-	if token == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Token not proportinated"))
-		return
-	}
-
-	db, err := sql.Open("sqlite3", DBFile)
-
-	if err != nil {
-		log.Println("Error(Open):", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if _, err = db.Exec(Table); err != nil {
-		log.Println("Error(Create Table):", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	_, err = db.Exec(
-		"INSERT INTO Tokens VALUES(?, ?);",
-		token, time.Now().Format(time.RFC3339),
-	)
-
-	if err != nil {
-		log.Println("Error(Exec):", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
 	}
 
 }
@@ -204,7 +143,6 @@ func main() {
 	}
 
 	http.HandleFunc("/sendAll", sendAll)
-	http.HandleFunc("/registerToken", registerToken)
 
 	fmt.Printf("Running in %s...\n", port)
 
