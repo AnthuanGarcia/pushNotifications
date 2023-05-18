@@ -21,23 +21,16 @@ type Ambient struct {
 	Movement    int     `json:"move"`
 }
 
-var app *firebase.App
-
 func sendPushNotification(ambient Ambient) (err error) {
 
 	credentials := os.Getenv("FILENAME_CREDENTIALS")
 	opts := []option.ClientOption{option.WithCredentialsFile(credentials)}
 
 	ctx := context.Background()
+	app, err := firebase.NewApp(ctx, nil, opts...)
 
-	if app == nil {
-
-		app, err = firebase.NewApp(ctx, nil, opts...)
-
-		if err != nil {
-			return
-		}
-
+	if err != nil {
+		return
 	}
 
 	fcmClient, err := app.Messaging(ctx)
