@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 
@@ -19,6 +20,11 @@ type Ambient struct {
 	Humidity    float64 `json:"humidity"`
 	HeatIndex   float64 `json:"heatIndex"`
 	Movement    int     `json:"move"`
+}
+
+type LogTemperature struct {
+	AdjTemperature float64 `json:"adj_temperature"`
+	AvgTemperature float64 `json:"avg_temperature"`
 }
 
 func firebaseApp(ctx context.Context) (app *firebase.App, err error) {
@@ -110,7 +116,7 @@ func sendPushNotification(ambient Ambient) (err error) {
 
 }
 
-func writeTemperature(temperature float64) (err error) {
+func writeTemperature(temp LogTemperature) (err error) {
 
 	ctx := context.Background()
 	app, err := firebaseApp(ctx)
@@ -138,7 +144,10 @@ func writeTemperature(temperature float64) (err error) {
 		temperatures = temperatures[1:]
 	}
 
-	temperatures = append(temperatures, temperature)
+	temperatures = append(temperatures, map[string]interface{}{
+		"avgTemperature": math.Floor(temp.AvgTemperature*100) * 0.01,
+		"adjTemperature": math.Floor(temp.AdjTemperature*100) * 0.01,
+	})
 
 	_, err = values.Set(ctx, map[string]interface{}{
 		"Temperatures": temperatures,
@@ -189,9 +198,7 @@ func setTemperature(w http.ResponseWriter, r *http.Request) {
 	}
 
 	decoder := json.NewDecoder(r.Body)
-	data := struct {
-		Temperature float64 `json:"temperature"`
-	}{}
+	data := LogTemperature{}
 
 	err := decoder.Decode(&data)
 
@@ -201,7 +208,7 @@ func setTemperature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = writeTemperature(data.Temperature); err != nil {
+	if err = writeTemperature(data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Fail in writing temperature"))
 		return
