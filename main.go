@@ -21,13 +21,25 @@ type Ambient struct {
 	Movement    int     `json:"move"`
 }
 
-func sendPushNotification(ambient Ambient) (err error) {
+func firebaseApp(ctx context.Context) (app *firebase.App, err error) {
 
 	credentials := os.Getenv("FILENAME_CREDENTIALS")
 	opts := []option.ClientOption{option.WithCredentialsFile(credentials)}
 
+	app, err = firebase.NewApp(ctx, nil, opts...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return
+
+}
+
+func sendPushNotification(ambient Ambient) (err error) {
+
 	ctx := context.Background()
-	app, err := firebase.NewApp(ctx, nil, opts...)
+	app, err := firebaseApp(ctx)
 
 	if err != nil {
 		return
@@ -98,6 +110,47 @@ func sendPushNotification(ambient Ambient) (err error) {
 
 }
 
+func writeTemperature(temperature float64) (err error) {
+
+	ctx := context.Background()
+	app, err := firebaseApp(ctx)
+
+	if err != nil {
+		return
+	}
+
+	dbClient, err := app.Firestore(ctx)
+
+	if err != nil {
+		return
+	}
+
+	values := dbClient.Collection("temperatures").Doc("values")
+	data, err := values.Get(ctx)
+
+	if err != nil {
+		return
+	}
+
+	temperatures := data.Data()["Temperatures"].([]interface{})
+
+	if len(temperatures) >= 24 {
+		temperatures = temperatures[1:]
+	}
+
+	temperatures = append(temperatures, temperature)
+
+	_, err = values.Set(ctx, map[string]interface{}{
+		"Temperatures": temperatures,
+	})
+
+	if err != nil {
+		return
+	}
+
+	return nil
+}
+
 func sendAll(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
@@ -127,6 +180,35 @@ func sendAll(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func setTemperature(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Invalid Method"))
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	data := struct {
+		Temperature float64 `json:"temperature"`
+	}{}
+
+	err := decoder.Decode(&data)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("MIssing data"))
+		return
+	}
+
+	if err = writeTemperature(data.Temperature); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Fail in writing temperature"))
+		return
+	}
+
+}
+
 func main() {
 
 	port := os.Getenv("PORT")
@@ -136,6 +218,7 @@ func main() {
 	}
 
 	http.HandleFunc("/sendAll", sendAll)
+	http.HandleFunc("/writeTemp", setTemperature)
 
 	fmt.Printf("Running in %s...\n", port)
 
