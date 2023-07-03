@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/messaging"
 	"google.golang.org/api/iterator"
@@ -149,9 +150,7 @@ func writeTemperature(temp LogTemperature) (err error) {
 		"adjTemperature": math.Floor(temp.AdjTemperature*100) * 0.01,
 	})
 
-	_, err = values.Set(ctx, map[string]interface{}{
-		"Temperatures": temperatures,
-	})
+	_, err = data.Ref.Update(ctx, []firestore.Update{{Path: "Temperatures", Value: temperatures}})
 
 	if err != nil {
 		return
