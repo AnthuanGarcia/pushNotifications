@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
@@ -64,16 +65,16 @@ func sendPushNotification(ambient Ambient) (err error) {
 		return
 	}
 
-	data := make(map[string]string)
-
-	data["Title"] = "Alerta de Ambiente"
-	data["Body"] = fmt.Sprintf(
-		"Temperatura: %.2f°C<br>Humedad: %.0f%%<br>Indice de Calor: %.2f°C",
-		ambient.Temperature,
-		ambient.Humidity,
-		ambient.HeatIndex,
-	)
-	data["Temp"] = ""
+	data := map[string]string{
+		"Title": "Alerta de Ambiente",
+		"Body": fmt.Sprintf(
+			"Temperatura: %.2f°C<br>Humedad: %.0f%%<br>Indice de Calor: %.2f°C",
+			ambient.Temperature,
+			ambient.Humidity,
+			ambient.HeatIndex,
+		),
+		"Temp": "",
+	}
 
 	if ambient.Movement > 0 {
 
@@ -140,15 +141,18 @@ func writeTemperature(temp LogTemperature) (err error) {
 	}
 
 	temperatures := data.Data()["Temperatures"].([]interface{})
+	size := len(temperatures)
 
-	if len(temperatures) >= 24 {
-		temperatures = temperatures[1:]
+	for i := 0; i < 24-size; i++ {
+		temperatures = append(temperatures, 0)
 	}
 
-	temperatures = append(temperatures, map[string]interface{}{
+	i := time.Now().Hour()
+
+	temperatures[i] = map[string]interface{}{
 		"avgTemperature": math.Floor(temp.AvgTemperature*100) * 0.01,
 		"adjTemperature": math.Floor(temp.AdjTemperature*100) * 0.01,
-	})
+	}
 
 	_, err = data.Ref.Update(ctx, []firestore.Update{{Path: "Temperatures", Value: temperatures}})
 
@@ -188,7 +192,7 @@ func sendAll(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func setTemperature(w http.ResponseWriter, r *http.Request) {
+func setTemperatures(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -224,7 +228,7 @@ func main() {
 	}
 
 	http.HandleFunc("/sendAll", sendAll)
-	http.HandleFunc("/writeTemp", setTemperature)
+	http.HandleFunc("/writeTemp", setTemperatures)
 
 	fmt.Printf("Running in %s...\n", port)
 
