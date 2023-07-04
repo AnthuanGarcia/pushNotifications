@@ -147,7 +147,8 @@ func writeTemperature(temp LogTemperature) (err error) {
 		temperatures = append(temperatures, 0)
 	}
 
-	i := time.Now().Hour()
+	hour := time.Now().UTC()
+	i := hour.In(time.FixedZone("CST", -6*3600)).Hour()
 
 	temperatures[i] = map[string]interface{}{
 		"avgTemperature": math.Floor(temp.AvgTemperature*100) * 0.01,
