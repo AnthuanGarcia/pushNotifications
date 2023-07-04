@@ -151,8 +151,8 @@ func writeTemperature(temp LogTemperature) (err error) {
 	i := hour.In(time.FixedZone("CST", -6*3600)).Hour()
 
 	temperatures[i] = map[string]interface{}{
-		"avgTemperature": math.Floor(temp.AvgTemperature*100) * 0.01,
-		"adjTemperature": math.Floor(temp.AdjTemperature*100) * 0.01,
+		"avg_temperature": math.Floor(temp.AvgTemperature*100) * 0.01,
+		"adj_temperature": math.Floor(temp.AdjTemperature*100) * 0.01,
 	}
 
 	_, err = data.Ref.Update(ctx, []firestore.Update{{Path: "Temperatures", Value: temperatures}})
