@@ -29,6 +29,8 @@ type LogTemperature struct {
 	AvgTemperature float64 `json:"avg_temperature"`
 }
 
+var timeZone = time.FixedZone("CST", -6*3600)
+
 func firebaseApp(ctx context.Context) (app *firebase.App, err error) {
 
 	credentials := os.Getenv("FILENAME_CREDENTIALS")
@@ -41,6 +43,33 @@ func firebaseApp(ctx context.Context) (app *firebase.App, err error) {
 	}
 
 	return
+
+}
+
+func countDocs(ite *firestore.DocumentIterator) (count int) {
+
+	for {
+
+		_, err := ite.Next()
+
+		if err == iterator.Done {
+			return
+		}
+
+		if err != nil {
+			return -1
+		}
+
+		count++
+
+	}
+
+}
+
+func appendSeconds(t string) string {
+
+	offset := len(t) - 2
+	return fmt.Sprintf("%s:%02d%s", t[:offset], time.Now().In(timeZone).Second(), t[offset:])
 
 }
 
@@ -82,6 +111,21 @@ func sendPushNotification(ambient Ambient) (err error) {
 		data["Body"] = "Se han detectado lecturas de movimiento."
 		data["Move"] = ""
 		delete(data, "Temp")
+
+		t := time.Now().In(timeZone)
+		hour := appendSeconds(t.Format(time.Kitchen))
+		collection := dbClient.Collection("movement")
+
+		year, month, day := t.Date()
+
+		doc := collection.Doc(fmt.Sprintf("%d-%d-%d", year, month, day))
+
+		// NOT COMPLETE
+		// TO DO:
+		// - Every day create a document, and in this document save a list that contains the hours for readings in that day
+		doc.Set(ctx, map[string]interface{}{
+			"movement_time": hour,
+		})
 
 	}
 
@@ -147,8 +191,8 @@ func writeTemperature(temp LogTemperature) (err error) {
 		temperatures = append(temperatures, 0)
 	}
 
-	hour := time.Now().UTC()
-	i := hour.In(time.FixedZone("CST", -6*3600)).Hour()
+	hour := time.Now()
+	i := hour.In(timeZone).Hour()
 
 	temperatures[i] = map[string]interface{}{
 		"avg_temperature": math.Floor(temp.AvgTemperature*100) * 0.01,
