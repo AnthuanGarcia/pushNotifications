@@ -15,6 +15,8 @@ import (
 	"firebase.google.com/go/messaging"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Ambient struct {
@@ -66,10 +68,11 @@ func countDocs(ite *firestore.DocumentIterator) (count int) {
 
 }
 
-func appendSeconds(t string) string {
+func get12hrsWithSecs(t time.Time) string {
 
-	offset := len(t) - 2
-	return fmt.Sprintf("%s:%02d%s", t[:offset], time.Now().In(timeZone).Second(), t[offset:])
+	time12 := t.Format(time.Kitchen)
+	offset := len(time12) - 2
+	return fmt.Sprintf("%s:%02d%s", time12[:offset], t.Second(), time12[offset:])
 
 }
 
@@ -113,19 +116,37 @@ func sendPushNotification(ambient Ambient) (err error) {
 		delete(data, "Temp")
 
 		t := time.Now().In(timeZone)
-		hour := appendSeconds(t.Format(time.Kitchen))
+		hour := get12hrsWithSecs(t)
 		collection := dbClient.Collection("movement")
 
 		year, month, day := t.Date()
 
-		doc := collection.Doc(fmt.Sprintf("%d-%d-%d", year, month, day))
+		doc := collection.Doc(fmt.Sprintf("%d-%d-%d", day, month, year))
 
 		// NOT COMPLETE
 		// TO DO:
 		// - Every day create a document, and in this document save a list that contains the hours for readings in that day
-		doc.Set(ctx, map[string]interface{}{
-			"movement_time": hour,
-		})
+		snapshot, err := doc.Get(ctx)
+
+		if status.Code(err) == codes.NotFound {
+
+			doc.Set(ctx, map[string]interface{}{
+				"move_logs": []string{},
+			})
+
+		} else if err != nil {
+			log.Println(err)
+		}
+
+		moves, _ := snapshot.DataAt("move_logs")
+		logs := moves.([]interface{})
+		logs = append(logs, hour)
+
+		_, err = snapshot.Ref.Update(ctx, []firestore.Update{{Path: "move_logs", Value: logs}})
+
+		if err != nil {
+			log.Println(err)
+		}
 
 	}
 
