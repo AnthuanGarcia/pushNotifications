@@ -119,13 +119,23 @@ func sendPushNotification(ambient Ambient) (err error) {
 		hour := get12hrsWithSecs(t)
 		collection := dbClient.Collection("movement")
 
+		docs, err := collection.Snapshots(ctx).Query.Documents(ctx).GetAll()
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		if len(docs) >= 7 {
+			_, err = docs[0].Ref.Delete(ctx)
+
+			if err != nil {
+				log.Println(err)
+			}
+		}
+
 		year, month, day := t.Date()
 
-		doc := collection.Doc(fmt.Sprintf("%d-%d-%d", day, month, year))
-
-		// NOT COMPLETE
-		// TO DO:
-		// - Every day create a document, and in this document save a list that contains the hours for readings in that day
+		doc := collection.Doc(fmt.Sprintf("%02d-%02d-%d", day, month, year))
 		snapshot, err := doc.Get(ctx)
 
 		if status.Code(err) == codes.NotFound {
