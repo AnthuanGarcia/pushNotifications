@@ -135,27 +135,31 @@ func sendPushNotification(ambient Ambient) (err error) {
 
 		year, month, day := t.Date()
 
-		doc := collection.Doc(fmt.Sprintf("%02d-%02d-%d", day, month, year))
+		doc := collection.Doc(fmt.Sprintf("%d-%d-%d", day, month, year))
 		snapshot, err := doc.Get(ctx)
 
 		if status.Code(err) == codes.NotFound {
 
 			doc.Set(ctx, map[string]interface{}{
-				"move_logs": []string{},
+				"move_logs": []string{hour},
 			})
 
 		} else if err != nil {
+
 			log.Println(err)
-		}
 
-		moves, _ := snapshot.DataAt("move_logs")
-		logs := moves.([]interface{})
-		logs = append(logs, hour)
+		} else {
 
-		_, err = snapshot.Ref.Update(ctx, []firestore.Update{{Path: "move_logs", Value: logs}})
+			moves, _ := snapshot.DataAt("move_logs")
+			logs := moves.([]interface{})
+			logs = append(logs, hour)
 
-		if err != nil {
-			log.Println(err)
+			_, err = snapshot.Ref.Update(ctx, []firestore.Update{{Path: "move_logs", Value: logs}})
+
+			if err != nil {
+				log.Println(err)
+			}
+
 		}
 
 	}
