@@ -135,7 +135,7 @@ func sendPushNotification(ambient Ambient) (err error) {
 
 		year, month, day := t.Date()
 
-		doc := collection.Doc(fmt.Sprintf("%d-%d-%d", day, month, year))
+		doc := collection.Doc(fmt.Sprintf("%d-%d-%d", year, month, day))
 		snapshot, err := doc.Get(ctx)
 
 		if status.Code(err) == codes.NotFound {
